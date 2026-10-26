@@ -151,11 +151,55 @@ function Welcome({busy,onEnter}:{busy:boolean;onEnter:(room:string,name:string)=
 }
 function MissionMap({next}:{next:number}) {return <ol className="mission-map">{missions.map((m,i)=>{const Icon=missionIcons[i];return <li key={m.number} className={next>=m.end?'done':next>=m.start?'active':''}><span className="map-node">{next>=m.end?<Check size={18}/>:<Icon size={18}/>}</span><div><small>MISIÓN 0{m.number}</small><strong>{m.label}</strong></div></li>})}</ol>}
 function Waiting({state}:{state:State}) {return <section className="waiting"><div className="waiting-radar"><Radio size={44}/></div><span className="eyebrow">ENLACE ESTABLECIDO</span><h1>Ya estás en el equipo.</h1><p>Tu tractor está listo. La jornada empieza cuando el docente dé la señal.</p><Tractor/><div className="waiting-meta"><span><Users size={17}/>{state.board.length} operadores en la sala</span><span className="waiting-pulse">Esperando inicio</span></div><p className="quiet-note">Podés dejar esta pantalla abierta. Vas a empezar automáticamente.</p></section>}
+const ANSWER_LABELS: Record<string, string> = {
+ vines: 'Frutero / viñatero (chasis angosto entre hileras)',
+ cane: 'Cañero de alto despeje',
+ tracks: 'Sistema de orugas (eficiencia tractiva > 90%)',
+ '65': '65% de eficiencia tractiva (Tracción asistida 4×4)',
+ work: '80–90 °C (Temperatura de régimen óptimo del motor)',
+ extra: 'Entrega fuerza extra ante mayor resistencia (reserva de par)',
+ pull: 'Barra de tiro ➔ Arrastrar implementos',
+ spin: 'Toma de potencia (TDP) ➔ Transmitir giro mecánico (540/1000 rpm)',
+ lift: 'Enganche de 3 puntos ➔ Levantar, sostener y regular profundidad',
+ optimal: '5–12% de patinamiento (Rango óptimo para labores pesadas)',
+ off: 'Desconectar la doble tracción al circular por asfalto',
+ idle: 'Dejar el motor en ralentí unos minutos antes de apagarlo'
+}
+
 function Feedback({review,onNext,pausedExternally}:{review:Review;onNext:()=>void;pausedExternally:boolean}) {
- const [remaining,setRemaining]=useState(10);const [paused,setPaused]=useState(false)
+ const [remaining,setRemaining]=useState(25);const [paused,setPaused]=useState(false)
  useEffect(()=>{if(paused||pausedExternally)return;const t=setInterval(()=>setRemaining(n=>Math.max(0,n-1)),1000);return()=>clearInterval(t)},[paused,pausedExternally])
  useEffect(()=>{if(remaining===0&&!pausedExternally)onNext()},[remaining,onNext,pausedExternally])
- return <motion.section className={`feedback ${review.correct?'correct':'incorrect'}`} initial={{opacity:0,scale:.96}} animate={{opacity:1,scale:1}} aria-live="polite"><div className="feedback-icon">{review.correct?<CheckCircle2 size={55}/>:<Wrench size={48}/>}</div><span className="eyebrow">DECISIÓN CONFIRMADA</span><h1>{review.correct?'¡Buena decisión!':'Cada decisión enseña.'}</h1><div className="feedback-score">+{review.points}<span> PUNTOS</span></div><p>{review.explanation}</p><div className="feedback-animation"><Tractor animated={review.correct}/></div><button className="button primary" onClick={onNext}>SEGUIR LA JORNADA<ArrowRight size={20}/></button><button className="pause-button" onClick={()=>setPaused(!paused)}>{paused?<Play size={15}/>:<Pause size={15}/>} {paused?'Continuación automática pausada':`Continuar en ${remaining} s · Pausar para leer`}</button></motion.section>
+ const correctLabel=ANSWER_LABELS[review.answer]||review.answer
+ return <motion.section className={`feedback ${review.correct?'correct':'incorrect'}`} initial={{opacity:0,scale:.96}} animate={{opacity:1,scale:1}} aria-live="polite">
+  <div className="feedback-icon">{review.correct?<CheckCircle2 size={55}/>:<Wrench size={48}/>}</div>
+  <div className={`feedback-badge ${review.correct?'correct':'incorrect'}`}>
+   {review.correct?<Check size={14}/>:<X size={14}/>}
+   <span>{review.correct?'¡RESPUESTA CORRECTA!':'RESPUESTA INCORRECTA'}</span>
+  </div>
+  <h1>{review.correct?'¡Excelente decisión!':'Atención con esta decisión'}</h1>
+  <div className="feedback-score">{review.correct?`+${review.points}`:'+0'}<span> PUNTOS</span></div>
+  
+  {!review.correct&&<div className="feedback-answer-box">
+   <span className="feedback-answer-label">La opción correcta era:</span>
+   <strong className="feedback-answer-value">{correctLabel}</strong>
+  </div>}
+
+  <div className="feedback-explanation-box">
+   <div className="feedback-explanation-header">
+    {review.correct?(
+     <><CheckCircle2 size={18}/><span>¿Por qué es correcta tu respuesta?</span></>
+    ):(
+     <><HelpCircle size={18}/><span>¿Por qué está mal y cuál es el motivo técnico?</span></>
+    )}
+   </div>
+   <p className="feedback-explanation-text">{review.explanation}</p>
+  </div>
+
+  <div className="feedback-animation"><Tractor animated={review.correct}/></div>
+  <button className="button primary" onClick={onNext}>SEGUIR LA JORNADA<ArrowRight size={20}/></button>
+  <button className="pause-button" onClick={()=>setPaused(!paused)}>{paused?<Play size={15}/>:<Pause size={15}/>} {paused?'Continuación automática pausada':`Continuar en ${remaining} s · Pausar para leer con calma`}</button>
+ </motion.section>
 }
 function Board({board,ownId,progress=true}:{board:BoardEntry[];ownId?:string;progress?:boolean}) {
  const finished=board.filter(p=>p.finished);const playing=board.filter(p=>!p.finished)
@@ -164,7 +208,7 @@ function Board({board,ownId,progress=true}:{board:BoardEntry[];ownId?:string;pro
 function Podium({board}:{board:BoardEntry[]}) {const winners=board.filter(p=>p.finished&&(p.rank||9)<=3);if(!winners.length)return null;return <div className="podium">{[2,1,3].map(rank=>{const group=winners.filter(p=>p.rank===rank);return group.length?<motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} transition={{delay:rank*.15}} className={`podium-place podium-${rank}`} key={rank}>{rank===1&&<Trophy size={28}/>}<strong>{group.map(p=>p.name).join(' · ')}</strong><span>{group[0].score} PTS</span><b>{rank.toString().padStart(2,'0')}</b></motion.div>:null})}</div>}
 function Results({state,onRanking}:{state:State;onRanking:()=>void}) {
  const p=state.player!;const rank=state.board.find(x=>x.id===p.id)?.rank
- return <section className="results"><div className="confetti" aria-hidden="true">{Array.from({length:20},(_,i)=><i key={i} style={{left:`${i*5}%`,animationDelay:`${i*.13}s`,background:i%2?'#e8f45a':'#65e2d5'}}/>)}</div><span className="eyebrow">05 / 05 MISIONES COMPLETADAS</span><div className="finish-tractor"><Tractor animated/></div><h1>Jornada cumplida.</h1><p className="result-class">{classification(p.score)}</p><div className="result-total">{p.score}<small>/1000 PTS</small></div><div className="result-position"><Trophy size={20}/><span>Posición actual <b>#{rank||'—'}</b></span></div><p className="quiet-note">Tu posición se actualiza cuando terminan otros operadores. Los empates comparten puesto.</p><div className="mission-recap">{missions.map(m=><div key={m.number}><span>0{m.number} · {m.label}</span><b>{state.history.filter(r=>r.mission===m.number).reduce((s,r)=>s+r.points,0)}<small>/200</small></b></div>)}</div><button className="button primary" onClick={onRanking}>VER RANKING DE LA SALA<Trophy size={20}/></button><details className="learning-review"><summary>Repasá tus decisiones</summary>{state.history.map(r=><article key={r.id}><h3>{r.correct?<CheckCircle2 size={16}/>:<Wrench size={16}/>} {r.title} <span>+{r.points}</span></h3><p>{r.explanation}</p></article>)}</details></section>
+ return <section className="results"><div className="confetti" aria-hidden="true">{Array.from({length:20},(_,i)=><i key={i} style={{left:`${i*5}%`,animationDelay:`${i*.13}s`,background:i%2?'#e8f45a':'#65e2d5'}}/>)}</div><span className="eyebrow">05 / 05 MISIONES COMPLETADAS</span><div className="finish-tractor"><Tractor animated/></div><h1>Jornada cumplida.</h1><p className="result-class">{classification(p.score)}</p><div className="result-total">{p.score}<small>/1000 PTS</small></div><div className="result-position"><Trophy size={20}/><span>Posición actual <b>#{rank||'—'}</b></span></div><p className="quiet-note">Tu posición se actualiza cuando terminan otros operadores. Los empates comparten puesto.</p><div className="mission-recap">{missions.map(m=><div key={m.number}><span>0{m.number} · {m.label}</span><b>{state.history.filter(r=>r.mission===m.number).reduce((s,r)=>s+r.points,0)}<small>/200</small></b></div>)}</div><button className="button primary" onClick={onRanking}>VER RANKING DE LA SALA<Trophy size={20}/></button><details className="learning-review"><summary>Repasá tus decisiones</summary>{state.history.map(r=><article key={r.id}><h3>{r.correct?<CheckCircle2 size={16}/>:<Wrench size={16}/>} {r.title} <span>+{r.points}</span></h3>{!r.correct&&<p className="learning-correct"><b>Respuesta correcta:</b> {ANSWER_LABELS[r.answer]||r.answer}</p>}<p>{r.explanation}</p></article>)}</details></section>
 }
 function TeacherEntry({busy,run,openRoom}:{busy:boolean;run:(a:()=>Promise<void>)=>Promise<void>;openRoom:(code:string)=>Promise<unknown>}) {
  const [authorized,setAuthorized]=useState(false);const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [title,setTitle]=useState('La anatomía de la potencia móvil');const [rooms,setRooms]=useState<RoomSummary[]>([])
